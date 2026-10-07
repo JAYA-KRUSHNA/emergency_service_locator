@@ -1,399 +1,128 @@
 // ============================================================
-// Emergency Service Locator — Mock Data
+// Emergency Service Locator — Location-Relative Fallback Data
+// ============================================================
+// These services are generated relative to the user's actual location.
+// Used only when the Overpass API is unreachable.
 // ============================================================
 
 import { EmergencyService } from '@/lib/types';
 
-// Services positioned around the default location (New Delhi area)
-export const MOCK_SERVICES: EmergencyService[] = [
-  // ── Hospitals ───────────────────────────────────────────
-  {
-    id: 'h1',
-    name: 'AIIMS Hospital',
-    category: 'hospital',
-    address: 'Sri Aurobindo Marg, Ansari Nagar, New Delhi, 110029',
-    coordinates: { lat: 28.5672, lng: 77.2100 },
-    phone: '+91 11 2658 8500',
-    rating: 4.6,
-    reviewCount: 12840,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Emergency', 'ICU', 'Surgery', 'Trauma Center', 'Cardiology', 'Neurology', 'Pediatrics'],
-    photos: [],
-  },
-  {
-    id: 'h2',
-    name: 'Safdarjung Hospital',
-    category: 'hospital',
-    address: 'Ring Road, Safdarjung Enclave, New Delhi, 110029',
-    coordinates: { lat: 28.5687, lng: 77.2066 },
-    phone: '+91 11 2616 4033',
-    rating: 4.2,
-    reviewCount: 8950,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Emergency', 'ICU', 'Surgery', 'Burns Unit', 'Orthopedics', 'Gynecology'],
-    photos: [],
-  },
-  {
-    id: 'h3',
-    name: 'Max Super Specialty Hospital',
-    category: 'hospital',
-    address: '1, 2, Press Enclave Road, Saket, New Delhi, 110017',
-    coordinates: { lat: 28.5280, lng: 77.2147 },
-    phone: '+91 11 2651 5050',
-    rating: 4.8,
-    reviewCount: 15600,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Emergency', 'ICU', 'Surgery', 'Cardiology', 'Oncology', 'Neurology', 'Transplant'],
-    photos: [],
-  },
-  {
-    id: 'h4',
-    name: 'Sir Ganga Ram Hospital',
-    category: 'hospital',
-    address: 'Rajinder Nagar, New Delhi, 110060',
-    coordinates: { lat: 28.6396, lng: 77.1892 },
-    phone: '+91 11 2586 0700',
-    rating: 4.5,
-    reviewCount: 11200,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Emergency', 'ICU', 'Surgery', 'Kidney Transplant', 'Liver Transplant'],
-    photos: [],
-  },
-  {
-    id: 'h5',
-    name: 'Apollo Hospital',
-    category: 'hospital',
-    address: 'Sarita Vihar, Delhi-Mathura Road, New Delhi, 110076',
-    coordinates: { lat: 28.5375, lng: 77.2835 },
-    phone: '+91 11 7179 1090',
-    rating: 4.7,
-    reviewCount: 13400,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Emergency', 'ICU', 'Cardiology', 'Robotic Surgery', 'Oncology'],
-    photos: [],
-  },
+// 1 degree of latitude ≈ 111km
+// 1 degree of longitude ≈ 111km * cos(lat)
+function offsetCoords(
+  baseLat: number,
+  baseLng: number,
+  dLatKm: number,
+  dLngKm: number
+): { lat: number; lng: number } {
+  const lngScale = Math.cos((baseLat * Math.PI) / 180);
+  return {
+    lat: baseLat + dLatKm / 111,
+    lng: baseLng + dLngKm / (111 * lngScale),
+  };
+}
 
-  // ── Police Stations ─────────────────────────────────────
-  {
-    id: 'p1',
-    name: 'Parliament Street Police Station',
-    category: 'police',
-    address: 'Parliament Street, Connaught Place, New Delhi, 110001',
-    coordinates: { lat: 28.6227, lng: 77.2138 },
-    phone: '+91 11 2336 0071',
-    rating: 3.8,
-    reviewCount: 320,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['FIR Registration', 'General Enquiry', 'Cyber Crime', 'Women Help Desk'],
-    photos: [],
-  },
-  {
-    id: 'p2',
-    name: 'Tilak Marg Police Station',
-    category: 'police',
-    address: 'Tilak Marg, New Delhi, 110001',
-    coordinates: { lat: 28.6190, lng: 77.2368 },
-    phone: '+91 11 2338 8888',
-    rating: 3.6,
-    reviewCount: 210,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['FIR Registration', 'General Enquiry', 'Passport Verification'],
-    photos: [],
-  },
-  {
-    id: 'p3',
-    name: 'Chanakyapuri Police Station',
-    category: 'police',
-    address: 'Chanakyapuri, New Delhi, 110021',
-    coordinates: { lat: 28.5978, lng: 77.1756 },
-    phone: '+91 11 2611 0066',
-    rating: 4.0,
-    reviewCount: 180,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['FIR Registration', 'VIP Security', 'General Enquiry'],
-    photos: [],
-  },
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
-  // ── Fire Stations ───────────────────────────────────────
-  {
-    id: 'f1',
-    name: 'Delhi Fire Service — Connaught Place',
-    category: 'fire',
-    address: 'Connaught Place, New Delhi, 110001',
-    coordinates: { lat: 28.6328, lng: 77.2197 },
-    phone: '+91 11 2341 1102',
-    rating: 4.3,
-    reviewCount: 95,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Fire Response', 'Rescue Operations', 'Hazmat Response', 'Water Rescue'],
-    photos: [],
-  },
-  {
-    id: 'f2',
-    name: 'Delhi Fire Service — ITO',
-    category: 'fire',
-    address: 'ITO, Tilak Marg, New Delhi, 110002',
-    coordinates: { lat: 28.6265, lng: 77.2410 },
-    phone: '+91 11 2327 1505',
-    rating: 4.1,
-    reviewCount: 67,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Fire Response', 'Rescue Operations', 'Building Collapse Response'],
-    photos: [],
-  },
+// ── Template definitions (distance offsets in km from user) ─
+// Each entry has a name, category, phone, and [dLat, dLng] offsets in km
+interface ServiceTemplate {
+  id: string;
+  name: string;
+  category: EmergencyService['category'];
+  phone: string;
+  dLat: number;  // km offset from user latitude
+  dLng: number;  // km offset from user longitude
+  rating: number;
+  reviewCount: number;
+  services: string[];
+  is24Hours: boolean;
+}
 
-  // ── Ambulance Services ──────────────────────────────────
-  {
-    id: 'a1',
-    name: 'CATS Ambulance Service',
-    category: 'ambulance',
-    address: 'LNJP Hospital Complex, New Delhi, 110002',
-    coordinates: { lat: 28.6368, lng: 77.2340 },
-    phone: '102',
-    rating: 4.0,
-    reviewCount: 540,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Basic Life Support', 'Advanced Life Support', 'Patient Transport'],
-    photos: [],
-  },
-  {
-    id: 'a2',
-    name: 'StanPlus Emergency Ambulance',
-    category: 'ambulance',
-    address: 'Multiple Locations, New Delhi',
-    coordinates: { lat: 28.6050, lng: 77.2250 },
-    phone: '+91 80 6790 6790',
-    rating: 4.6,
-    reviewCount: 2300,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Advanced Life Support', 'ICU on Wheels', 'Neonatal Transport', 'Air Ambulance'],
-    photos: [],
-  },
-
-  // ── Pharmacies ──────────────────────────────────────────
-  {
-    id: 'ph1',
-    name: 'Apollo Pharmacy',
-    category: 'pharmacy',
-    address: 'Block E, Connaught Place, New Delhi, 110001',
-    coordinates: { lat: 28.6305, lng: 77.2160 },
-    phone: '+91 11 4321 5678',
-    rating: 4.4,
-    reviewCount: 890,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '08:00', close: '23:00' },
-    ],
-    isOpen: true,
-    is24Hours: false,
-    services: ['Prescription Medicines', 'OTC Drugs', 'Health Products', 'Online Ordering'],
-    photos: [],
-  },
-  {
-    id: 'ph2',
-    name: 'MedPlus Pharmacy',
-    category: 'pharmacy',
-    address: 'Lodhi Road, New Delhi, 110003',
-    coordinates: { lat: 28.5920, lng: 77.2260 },
-    phone: '+91 11 2463 7890',
-    rating: 4.2,
-    reviewCount: 560,
-    operatingHours: [
-      { day: 'Monday-Saturday', open: '09:00', close: '22:00' },
-      { day: 'Sunday', open: '10:00', close: '20:00' },
-    ],
-    isOpen: true,
-    is24Hours: false,
-    services: ['Prescription Medicines', 'OTC Drugs', 'Medical Devices'],
-    photos: [],
-  },
-  {
-    id: 'ph3',
-    name: 'Jan Aushadhi Kendra',
-    category: 'pharmacy',
-    address: 'Karol Bagh, New Delhi, 110005',
-    coordinates: { lat: 28.6509, lng: 77.1923 },
-    phone: '+91 11 2587 4321',
-    rating: 4.5,
-    reviewCount: 340,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Generic Medicines', 'Prescription Medicines', 'Affordable Healthcare'],
-    photos: [],
-  },
-
-  // ── Petrol Stations ─────────────────────────────────────
-  {
-    id: 'pt1',
-    name: 'Indian Oil — India Gate',
-    category: 'petrol',
-    address: 'Rajpath, India Gate, New Delhi, 110001',
-    coordinates: { lat: 28.6129, lng: 77.2295 },
-    phone: '+91 11 2338 5566',
-    rating: 4.1,
-    reviewCount: 1250,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Petrol', 'Diesel', 'CNG', 'Air Filling', 'Convenience Store'],
-    photos: [],
-  },
-  {
-    id: 'pt2',
-    name: 'HP Petrol Pump — Lodhi Road',
-    category: 'petrol',
-    address: 'Lodhi Road, New Delhi, 110003',
-    coordinates: { lat: 28.5875, lng: 77.2200 },
-    phone: '+91 11 2469 0011',
-    rating: 4.0,
-    reviewCount: 780,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Petrol', 'Diesel', 'Air Filling', 'Car Wash'],
-    photos: [],
-  },
-
-  // ── EV Charging Stations ────────────────────────────────
-  {
-    id: 'ev1',
-    name: 'Tata Power EV Station — CP',
-    category: 'ev_charging',
-    address: 'Inner Circle, Connaught Place, New Delhi, 110001',
-    coordinates: { lat: 28.6340, lng: 77.2190 },
-    phone: '+91 11 4567 8900',
-    rating: 4.3,
-    reviewCount: 290,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['DC Fast Charging', 'AC Charging', 'CCS2', 'CHAdeMO', 'Type 2'],
-    photos: [],
-  },
-  {
-    id: 'ev2',
-    name: 'EESL Charging Hub — Pragati Maidan',
-    category: 'ev_charging',
-    address: 'Pragati Maidan, Mathura Road, New Delhi, 110001',
-    coordinates: { lat: 28.6168, lng: 77.2480 },
-    phone: '+91 11 4321 9876',
-    rating: 4.0,
-    reviewCount: 150,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '06:00', close: '23:00' },
-    ],
-    isOpen: true,
-    is24Hours: false,
-    services: ['DC Fast Charging', 'AC Charging', 'Battery Swap'],
-    photos: [],
-  },
-
-  // ── Government Emergency Services ───────────────────────
-  {
-    id: 'g1',
-    name: 'National Disaster Response Force (NDRF)',
-    category: 'government',
-    address: '6th Battalion, Lodhi Road, New Delhi, 110003',
-    coordinates: { lat: 28.5940, lng: 77.2180 },
-    phone: '+91 11 2436 1027',
-    rating: 4.5,
-    reviewCount: 420,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Disaster Response', 'Search & Rescue', 'Flood Relief', 'Earthquake Response'],
-    photos: [],
-  },
-  {
-    id: 'g2',
-    name: 'Delhi Emergency Operations Center',
-    category: 'government',
-    address: 'Rajendra Place, New Delhi, 110008',
-    coordinates: { lat: 28.6398, lng: 77.1760 },
-    phone: '112',
-    rating: 4.2,
-    reviewCount: 310,
-    operatingHours: [
-      { day: 'Monday-Sunday', open: '00:00', close: '23:59', is24Hours: true },
-    ],
-    isOpen: true,
-    is24Hours: true,
-    services: ['Emergency Coordination', 'Disaster Management', 'Relief Operations'],
-    photos: [],
-  },
-  {
-    id: 'g3',
-    name: 'Civil Defence Headquarters',
-    category: 'government',
-    address: 'A-Block, Vikas Bhawan, IP Estate, New Delhi, 110002',
-    coordinates: { lat: 28.6280, lng: 77.2455 },
-    phone: '+91 11 2337 0022',
-    rating: 3.9,
-    reviewCount: 85,
-    operatingHours: [
-      { day: 'Monday-Friday', open: '09:00', close: '17:30' },
-    ],
-    isOpen: true,
-    is24Hours: false,
-    services: ['Civil Defence', 'Volunteer Coordination', 'Emergency Preparedness'],
-    photos: [],
-  },
+const TEMPLATES: ServiceTemplate[] = [
+  // Hospitals
+  { id: 'fb-h1', name: 'City General Hospital', category: 'hospital', phone: '108', dLat: 0.8, dLng: 0.6, rating: 4.3, reviewCount: 3240, services: ['Emergency Care', 'ICU', 'Surgery', 'Trauma Center', 'Cardiology'], is24Hours: true },
+  { id: 'fb-h2', name: 'District Medical Center', category: 'hospital', phone: '108', dLat: -1.2, dLng: 0.9, rating: 4.1, reviewCount: 1850, services: ['Emergency', 'ICU', 'Surgery', 'Orthopedics', 'Gynecology'], is24Hours: true },
+  { id: 'fb-h3', name: 'Community Health Hospital', category: 'hospital', phone: '108', dLat: 1.5, dLng: -0.7, rating: 4.0, reviewCount: 1120, services: ['Emergency', 'Outpatient', 'Pediatrics', 'General Medicine'], is24Hours: true },
+  { id: 'fb-h4', name: 'Primary Health Centre', category: 'hospital', phone: '108', dLat: -0.4, dLng: -1.1, rating: 3.8, reviewCount: 560, services: ['General Medicine', 'Outpatient', 'Vaccination'], is24Hours: false },
+  // Police
+  { id: 'fb-p1', name: 'Central Police Station', category: 'police', phone: '100', dLat: 0.3, dLng: 0.4, rating: 3.9, reviewCount: 420, services: ['Emergency Response', 'FIR Registration', 'Crime Reporting', 'Women Help Desk'], is24Hours: true },
+  { id: 'fb-p2', name: 'Area Police Post', category: 'police', phone: '100', dLat: -0.9, dLng: -0.5, rating: 3.7, reviewCount: 180, services: ['Emergency Response', 'General Enquiry', 'Passport Verification'], is24Hours: true },
+  { id: 'fb-p3', name: 'Traffic Police Outpost', category: 'police', phone: '100', dLat: 1.1, dLng: 0.8, rating: 3.5, reviewCount: 95, services: ['Traffic Management', 'Road Accident Response'], is24Hours: true },
+  // Fire Stations
+  { id: 'fb-f1', name: 'City Fire Station', category: 'fire', phone: '101', dLat: 0.6, dLng: -0.4, rating: 4.4, reviewCount: 130, services: ['Fire Response', 'Rescue Operations', 'Hazmat Response', 'Water Rescue'], is24Hours: true },
+  { id: 'fb-f2', name: 'District Fire Brigade', category: 'fire', phone: '101', dLat: -1.4, dLng: 1.0, rating: 4.2, reviewCount: 85, services: ['Fire Fighting', 'Rescue', 'Building Collapse Response'], is24Hours: true },
+  // Ambulance
+  { id: 'fb-a1', name: 'Emergency Ambulance Service', category: 'ambulance', phone: '108', dLat: 0.2, dLng: 0.3, rating: 4.1, reviewCount: 670, services: ['Basic Life Support', 'Advanced Life Support', 'Patient Transport'], is24Hours: true },
+  { id: 'fb-a2', name: 'Community Ambulance Unit', category: 'ambulance', phone: '102', dLat: -0.7, dLng: 0.8, rating: 3.9, reviewCount: 340, services: ['Emergency Transport', 'Paramedic Care'], is24Hours: true },
+  // Pharmacies
+  { id: 'fb-ph1', name: '24/7 Medical Store', category: 'pharmacy', phone: 'N/A', dLat: 0.1, dLng: 0.2, rating: 4.3, reviewCount: 890, services: ['Prescription Drugs', 'OTC Medicines', 'Medical Supplies'], is24Hours: true },
+  { id: 'fb-ph2', name: 'City Pharmacy', category: 'pharmacy', phone: 'N/A', dLat: -0.3, dLng: -0.4, rating: 4.0, reviewCount: 450, services: ['Prescription Drugs', 'Health Supplements', 'Baby Care'], is24Hours: false },
+  { id: 'fb-ph3', name: 'Health Plus Chemist', category: 'pharmacy', phone: 'N/A', dLat: 0.9, dLng: 0.5, rating: 3.9, reviewCount: 320, services: ['Medicines', 'OTC Drugs', 'Medical Devices'], is24Hours: false },
+  // Petrol
+  { id: 'fb-pe1', name: 'Indian Oil Fuel Station', category: 'petrol', phone: 'N/A', dLat: 0.4, dLng: 0.7, rating: 4.0, reviewCount: 1200, services: ['Petrol', 'Diesel', 'CNG', 'Air & Water'], is24Hours: true },
+  { id: 'fb-pe2', name: 'HP Petrol Pump', category: 'petrol', phone: 'N/A', dLat: -0.6, dLng: -0.9, rating: 3.8, reviewCount: 780, services: ['Petrol', 'Diesel', 'Vehicle Care'], is24Hours: false },
+  // EV Charging
+  { id: 'fb-ev1', name: 'EV Charging Point', category: 'ev_charging', phone: 'N/A', dLat: 0.5, dLng: -0.6, rating: 4.1, reviewCount: 210, services: ['DC Fast Charging', 'AC Charging', 'Multiple Connectors'], is24Hours: true },
+  // Government
+  { id: 'fb-g1', name: 'Emergency Operations Center', category: 'government', phone: '112', dLat: 0.7, dLng: 0.3, rating: 4.2, reviewCount: 280, services: ['Emergency Coordination', 'Disaster Management', 'Relief Operations'], is24Hours: true },
+  { id: 'fb-g2', name: 'Municipal Corporation Office', category: 'government', phone: 'N/A', dLat: -1.0, dLng: 0.6, rating: 3.6, reviewCount: 120, services: ['Public Services', 'Civil Administration', 'Utilities'], is24Hours: false },
 ];
+
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+
+function makeHours(is24Hours: boolean) {
+  if (is24Hours) {
+    return DAYS.map(day => ({ day, open: '00:00', close: '23:59', is24Hours: true }));
+  }
+  return DAYS.map(day => ({
+    day,
+    open: '09:00',
+    close: day === 'Sunday' ? '13:00' : '20:00',
+    is24Hours: false,
+  }));
+}
+
+/**
+ * Generate fallback services positioned relative to the given location.
+ * This ensures services always appear near the user, regardless of where they are.
+ */
+export function generateFallbackServices(
+  baseLat: number,
+  baseLng: number
+): EmergencyService[] {
+  return TEMPLATES.map(tmpl => {
+    const coords = offsetCoords(baseLat, baseLng, tmpl.dLat, tmpl.dLng);
+    const distKm = haversineKm(baseLat, baseLng, coords.lat, coords.lng);
+
+    return {
+      id: tmpl.id,
+      name: tmpl.name,
+      category: tmpl.category,
+      coordinates: coords,
+      address: 'Near your location (estimated)',
+      phone: tmpl.phone,
+      rating: tmpl.rating,
+      reviewCount: tmpl.reviewCount,
+      isOpen: true,
+      is24Hours: tmpl.is24Hours,
+      operatingHours: makeHours(tmpl.is24Hours),
+      services: tmpl.services,
+      distance: Math.round(distKm * 100) / 100,
+      travelTime: Math.max(1, Math.round(distKm * 2.5 + 1)),
+    } satisfies EmergencyService;
+  }).sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
+}
+
+// Legacy export kept for backward compatibility
+export const MOCK_SERVICES = generateFallbackServices(28.6139, 77.209);

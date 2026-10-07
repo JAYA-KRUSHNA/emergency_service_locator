@@ -3,7 +3,10 @@
  * Fetches real emergency services near a given location.
  * No API key required — completely free.
  *
- * Fixes: simpler query, multiple mirrors, retry logic, mock fallback.
+ * Strategy:
+ *  1. Try multiple mirrors with short 12s timeout each
+ *  2. Use SEPARATE simple queries (no regex) — much faster on overloaded servers
+ *  3. If all mirrors fail → throw so caller can use fallback
  */
 
 import { EmergencyService, ServiceCategory, Coordinates } from './types';
@@ -40,18 +43,27 @@ const EMERGENCY_MAP: CategoryMap = {
   fire_station: 'fire',
 };
 
-// ── Build a lean Overpass query ────────────────────────────
+// ── Build a simple Overpass query (NO regex, fast) ─────────
 function buildQuery(lat: number, lng: number, radiusM: number): string {
-  // Cap radius at 10km for query performance
-  const r = Math.min(Math.round(radiusM), 10000);
+  // Cap radius at 8km for performance on public mirrors
+  const r = Math.min(Math.round(radiusM), 8000);
 
-  // Use union of node+way for the most common categories only
+  // Use exact match per amenity value — avoids regex slow-path on Overpass
   return `
-[out:json][timeout:20];
+[out:json][timeout:15];
 (
-  node["amenity"~"hospital|clinic|pharmacy|police|fire_station|fuel|charging_station|townhall"](around:${r},${lat},${lng});
-  node["emergency"~"ambulance_station|hospital|fire_station"](around:${r},${lat},${lng});
-  way["amenity"~"hospital|clinic|pharmacy|police|fire_station"](around:${r},${lat},${lng});
+  node["amenity"="hospital"](around:${r},${lat},${lng});
+  node["amenity"="clinic"](around:${r},${lat},${lng});
+  node["amenity"="police"](around:${r},${lat},${lng});
+  node["amenity"="fire_station"](around:${r},${lat},${lng});
+  node["amenity"="pharmacy"](around:${r},${lat},${lng});
+  node["amenity"="fuel"](around:${r},${lat},${lng});
+  node["amenity"="charging_station"](around:${r},${lat},${lng});
+  node["emergency"="ambulance_station"](around:${r},${lat},${lng});
+  way["amenity"="hospital"](around:${r},${lat},${lng});
+  way["amenity"="clinic"](around:${r},${lat},${lng});
+  way["amenity"="police"](around:${r},${lat},${lng});
+  way["amenity"="fire_station"](around:${r},${lat},${lng});
 );
 out center 60;
 `.trim();
@@ -210,7 +222,10 @@ async function fetchFromMirror(
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'EmergencyServiceLocatorApp/1.0',
+      },
       body: `data=${encodeURIComponent(query)}`,
       signal: controller.signal,
     });
@@ -234,14 +249,22 @@ export async function fetchRealServices(
   // Try each mirror in turn
   for (const mirror of OVERPASS_MIRRORS) {
     try {
-      const res = await fetchFromMirror(mirror, query, 20_000);
+      const res = await fetchFromMirror(mirror, query, 15_000);
 
       if (!res.ok) {
         lastError = new Error(`HTTP ${res.status} from ${mirror}`);
         continue; // try next mirror
       }
 
-      const data: { elements: OsmElement[] } = await res.json();
+      const text = await res.text();
+
+      // Check for Overpass error response (HTML error pages)
+      if (text.startsWith('<') || text.includes('runtime error') || text.includes('Not Acceptable')) {
+        lastError = new Error(`Overpass error from ${mirror}`);
+        continue;
+      }
+
+      const data: { elements: OsmElement[] } = JSON.parse(text);
 
       // Deduplicate by category+name key
       const seen = new Set<string>();

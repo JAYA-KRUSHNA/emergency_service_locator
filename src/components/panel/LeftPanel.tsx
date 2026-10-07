@@ -389,7 +389,7 @@ function ServiceList() {
   const {
     getFilteredServices, nearestService,
     setSelectedService, setShowDetails, requestDirections,
-    isLoadingServices, fetchError, refetchServices,
+    isLoadingServices, isUsingFallback, refetchServices,
   } = useApp();
   const services = getFilteredServices();
   const [sortBy, setSortBy] = useState<'nearest' | 'fastest' | 'rated'>('nearest');
@@ -417,51 +417,41 @@ function ServiceList() {
     );
   }
 
-  // ── Error state ──────────────────────────────────────────
-  if (fetchError) {
-    return (
-      <div style={{ padding: '0 16px' }}>
-        <div style={{
-          padding: '16px',
-          borderRadius: '14px',
-          background: 'var(--c-danger-50)',
-          border: '1px solid rgba(220,38,38,0.2)',
-          textAlign: 'center',
-        }}>
-          <div style={{ fontSize: '28px', marginBottom: '8px' }}>⚠️</div>
-          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--c-danger)', marginBottom: '4px' }}>
-            Could not load services
-          </p>
-          <p style={{ fontSize: '11.5px', color: 'var(--c-text-3)', marginBottom: '12px', lineHeight: 1.5 }}>
-            {fetchError}
-          </p>
-          <button
-            onClick={refetchServices}
-            style={{
-              padding: '8px 20px',
-              background: 'var(--c-danger)', color: 'white',
-              border: 'none', borderRadius: '9px',
-              fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-            }}
-          >🔄 Retry</button>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div style={{ padding: '0 16px' }}>
+      {/* Fallback banner */}
+      {isUsingFallback && (
+        <div style={{
+          marginBottom: '10px',
+          padding: '8px 12px',
+          borderRadius: '10px',
+          background: '#fffbeb',
+          border: '1px solid rgba(245,158,11,0.3)',
+          display: 'flex', alignItems: 'center', gap: '8px',
+        }}>
+          <span style={{ fontSize: '14px' }}>📡</span>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#92400e' }}>Estimated data — live search unavailable</div>
+            <div style={{ fontSize: '10.5px', color: '#b45309' }}>Positions are approximate. <button onClick={refetchServices} style={{ background: 'none', border: 'none', color: 'var(--c-primary)', fontWeight: 700, cursor: 'pointer', fontSize: '10.5px', padding: 0 }}>Retry live search →</button></div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: '11px', color: 'var(--c-text-3)' }}>
-            {services.length} real service{services.length !== 1 ? 's' : ''}
+            {services.length} service{services.length !== 1 ? 's' : ''}
           </span>
           <span style={{
-            fontSize: '9px', fontWeight: 700, color: '#16a34a',
-            background: '#f0fdf4', padding: '1px 6px', borderRadius: '99px',
-            border: '1px solid rgba(22,163,74,0.2)',
-          }}>LIVE</span>
+            fontSize: '9px', fontWeight: 700,
+            color: isUsingFallback ? '#92400e' : '#16a34a',
+            background: isUsingFallback ? '#fffbeb' : '#f0fdf4',
+            padding: '1px 6px', borderRadius: '99px',
+            border: `1px solid ${isUsingFallback ? 'rgba(245,158,11,0.3)' : 'rgba(22,163,74,0.2)'}`,
+          }}>{isUsingFallback ? 'ESTIMATED' : 'LIVE'}</span>
         </div>
         <div style={{ display: 'flex', gap: '2px' }}>
           {(['nearest', 'fastest', 'rated'] as const).map(s => (

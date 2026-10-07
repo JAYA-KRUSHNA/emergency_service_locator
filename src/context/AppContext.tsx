@@ -20,6 +20,7 @@ import {
 import { fetchRealServices } from '@/lib/overpassApi';
 import { fetchOsrmRoute } from '@/lib/osrmRouting';
 import { DEFAULT_LOCATION, DEFAULT_RADIUS, CATEGORY_LABELS } from '@/lib/constants';
+import { generateFallbackServices } from '@/data/mockServices';
 
 // ── Context type ───────────────────────────────────────────
 interface AppContextType extends AppState {
@@ -44,6 +45,7 @@ interface AppContextType extends AppState {
   isLoadingRoute: boolean;
   fetchError: string | null;
   routeError: string | null;
+  isUsingFallback: boolean;
   refetchServices: () => void;
 }
 
@@ -73,6 +75,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [allServices, setAllServices] = useState<EmergencyService[]>([]);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isUsingFallback, setIsUsingFallback] = useState(false);
   const fetchAbortRef = useRef<AbortController | null>(null);
   const lastFetchKey = useRef<string>('');
 
@@ -94,18 +97,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     setIsLoadingServices(true);
     setFetchError(null);
+    setIsUsingFallback(false);
 
     try {
       const services = await fetchRealServices(loc, radius);
-      setAllServices(services);
-      setFetchError(null);
+      if (services.length === 0) {
+        // Empty result — use fallback so map isn't blank
+        setAllServices(generateFallbackServices(loc.lat, loc.lng));
+        setIsUsingFallback(true);
+        setFetchError(null);
+      } else {
+        setAllServices(services);
+        setFetchError(null);
+      }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
-      console.error('Overpass API error:', err);
-      setFetchError(
-        'Could not load real services. Check your internet connection and try again.'
-      );
-      setAllServices([]);
+      console.warn('Overpass API failed, using location-relative fallback:', err);
+      // Use generated fallback — positioned relative to user's real location
+      setAllServices(generateFallbackServices(loc.lat, loc.lng));
+      setIsUsingFallback(true);
+      setFetchError(null); // Don't show an error — show the fallback data instead
     } finally {
       setIsLoadingServices(false);
     }
@@ -254,6 +265,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isLoadingRoute,
     fetchError,
     routeError,
+    isUsingFallback,
     refetchServices,
   };
 

@@ -4,8 +4,7 @@ import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 
 export function Navbar() {
-  const { setUserLocation } = useApp();
-  const [searchValue, setSearchValue] = useState('');
+  const { setUserLocation, searchQuery, setSearchQuery } = useApp();
   const [locState, setLocState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
@@ -103,8 +102,8 @@ export function Navbar() {
             <input
               type="text"
               placeholder="Search services..."
-              value={searchValue}
-              onChange={e => setSearchValue(e.target.value)}
+                          value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
               style={{
                 width: '100%', height: '36px',
                 padding: '0 12px 0 36px',
@@ -164,9 +163,9 @@ export function Navbar() {
               display: 'inline-block',
               animation: locState === 'loading' ? 'spin 1s linear infinite' : 'none',
             }}>{locIcon}</span>
-            <span style={{ display: 'none' }} className="show-md">
-              {locState === 'loading' ? 'Getting location…' :
-               locState === 'success' ? 'Location set!' :
+            <span style={{ fontSize: '12px', fontWeight: 600 }}>
+              {locState === 'loading' ? 'Getting…' :
+               locState === 'success' ? 'Location Set!' :
                locState === 'error' ? 'Failed' : 'My Location'}
             </span>
           </button>
