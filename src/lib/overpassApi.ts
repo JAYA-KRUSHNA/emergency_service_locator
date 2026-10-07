@@ -1,12 +1,14 @@
 /**
  * OpenStreetMap Overpass API integration
- * Fetches real emergency services near a given location.
+ * Fetches ALL emergency services in the selected radius.
  * No API key required — completely free.
  *
  * Strategy:
- *  1. Try multiple mirrors with short 12s timeout each
- *  2. Use SEPARATE simple queries (no regex) — much faster on overloaded servers
- *  3. If all mirrors fail → throw so caller can use fallback
+ *  1. Run a FULL comprehensive query with NO radius cap
+ *  2. Use nwr (node/way/relation) union type to get ALL mapped features
+ *  3. High output limit (500) to return as many as possible
+ *  4. Try each mirror with 25s timeout
+ *  5. On total failure → throw so caller falls back to generated data
  */
 
 import { EmergencyService, ServiceCategory, Coordinates } from './types';
@@ -18,54 +20,95 @@ const OVERPASS_MIRRORS = [
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 
-// ── OSM → category mapping ─────────────────────────────────
+// ── OSM → app category mapping ─────────────────────────────
 type CategoryMap = Record<string, ServiceCategory | undefined>;
 
 const AMENITY_MAP: CategoryMap = {
-  hospital: 'hospital',
-  clinic: 'hospital',
-  doctors: 'hospital',
-  healthcare: 'hospital',
-  police: 'police',
-  fire_station: 'fire',
-  pharmacy: 'pharmacy',
-  fuel: 'petrol',
-  charging_station: 'ev_charging',
-  townhall: 'government',
-  courthouse: 'government',
-  post_office: 'government',
+  // Medical
+  hospital:           'hospital',
+  clinic:             'hospital',
+  doctors:            'hospital',
+  dentist:            'hospital',
+  veterinary:         'hospital',
+  health_centre:      'hospital',
+  nursing_home:       'hospital',
+  // Emergency
+  police:             'police',
+  fire_station:       'fire',
+  // Pharmacy
+  pharmacy:           'pharmacy',
+  // Fuel / EV
+  fuel:               'petrol',
+  charging_station:   'ev_charging',
+  // Government
+  townhall:           'government',
+  courthouse:         'government',
+  post_office:        'government',
+  community_centre:   'government',
+  social_facility:    'government',
+  embassy:            'government',
 };
 
 const EMERGENCY_MAP: CategoryMap = {
-  ambulance_station: 'ambulance',
-  hospital: 'hospital',
-  police: 'police',
-  fire_station: 'fire',
+  ambulance_station:  'ambulance',
+  hospital:           'hospital',
+  police:             'police',
+  fire_station:       'fire',
+  yes:                'ambulance', // emergency=yes on a node
 };
 
-// ── Build a simple Overpass query (NO regex, fast) ─────────
-function buildQuery(lat: number, lng: number, radiusM: number): string {
-  // Cap radius at 8km for performance on public mirrors
-  const r = Math.min(Math.round(radiusM), 8000);
+const HEALTHCARE_MAP: CategoryMap = {
+  hospital:           'hospital',
+  clinic:             'hospital',
+  doctor:             'hospital',
+  pharmacy:           'pharmacy',
+  laboratory:         'hospital',
+  physiotherapy:      'hospital',
+  rehabilitation:     'hospital',
+  blood_bank:         'hospital',
+  dialysis:           'hospital',
+};
 
-  // Use exact match per amenity value — avoids regex slow-path on Overpass
+// ── Build comprehensive Overpass query ─────────────────────
+// Uses nwr (node + way + relation) to capture ALL feature types.
+// No radius cap — uses the full user-selected radius.
+function buildQuery(lat: number, lng: number, radiusM: number): string {
+  const r = Math.round(radiusM); // NO cap — user controls this
+
   return `
-[out:json][timeout:15];
+[out:json][timeout:25][maxsize:33554432];
 (
-  node["amenity"="hospital"](around:${r},${lat},${lng});
-  node["amenity"="clinic"](around:${r},${lat},${lng});
-  node["amenity"="police"](around:${r},${lat},${lng});
-  node["amenity"="fire_station"](around:${r},${lat},${lng});
-  node["amenity"="pharmacy"](around:${r},${lat},${lng});
-  node["amenity"="fuel"](around:${r},${lat},${lng});
-  node["amenity"="charging_station"](around:${r},${lat},${lng});
-  node["emergency"="ambulance_station"](around:${r},${lat},${lng});
-  way["amenity"="hospital"](around:${r},${lat},${lng});
-  way["amenity"="clinic"](around:${r},${lat},${lng});
-  way["amenity"="police"](around:${r},${lat},${lng});
-  way["amenity"="fire_station"](around:${r},${lat},${lng});
+  nwr["amenity"="hospital"](around:${r},${lat},${lng});
+  nwr["amenity"="clinic"](around:${r},${lat},${lng});
+  nwr["amenity"="doctors"](around:${r},${lat},${lng});
+  nwr["amenity"="dentist"](around:${r},${lat},${lng});
+  nwr["amenity"="health_centre"](around:${r},${lat},${lng});
+  nwr["amenity"="nursing_home"](around:${r},${lat},${lng});
+  nwr["amenity"="police"](around:${r},${lat},${lng});
+  nwr["amenity"="fire_station"](around:${r},${lat},${lng});
+  nwr["amenity"="pharmacy"](around:${r},${lat},${lng});
+  nwr["amenity"="fuel"](around:${r},${lat},${lng});
+  nwr["amenity"="charging_station"](around:${r},${lat},${lng});
+  nwr["amenity"="townhall"](around:${r},${lat},${lng});
+  nwr["amenity"="courthouse"](around:${r},${lat},${lng});
+  nwr["amenity"="post_office"](around:${r},${lat},${lng});
+  nwr["amenity"="community_centre"](around:${r},${lat},${lng});
+  nwr["emergency"="ambulance_station"](around:${r},${lat},${lng});
+  nwr["emergency"="fire_station"](around:${r},${lat},${lng});
+  nwr["emergency"="police"](around:${r},${lat},${lng});
+  nwr["healthcare"="hospital"](around:${r},${lat},${lng});
+  nwr["healthcare"="clinic"](around:${r},${lat},${lng});
+  nwr["healthcare"="pharmacy"](around:${r},${lat},${lng});
+  nwr["healthcare"="doctor"](around:${r},${lat},${lng});
+  nwr["healthcare"="blood_bank"](around:${r},${lat},${lng});
+  nwr["healthcare"="dialysis"](around:${r},${lat},${lng});
+  nwr["landuse"="hospital"](around:${r},${lat},${lng});
+  nwr["building"="hospital"](around:${r},${lat},${lng});
+  nwr["building"="fire_station"](around:${r},${lat},${lng});
+  nwr["building"="police"](around:${r},${lat},${lng});
+  nwr["building"="government"](around:${r},${lat},${lng});
 );
-out center 60;
+out center 500;
 `.trim();
 }
 
@@ -95,19 +138,19 @@ const DEFAULT_PHONES: Record<string, string> = {
   pharmacy: 'N/A', petrol: 'N/A', ev_charging: 'N/A', government: 'N/A',
 };
 const DEFAULT_SERVICES: Record<string, string[]> = {
-  hospital: ['Emergency Care', 'Outpatient', 'Ambulance'],
-  police: ['Emergency Response', 'Crime Reporting'],
-  fire: ['Fire Fighting', 'Rescue Operations'],
-  ambulance: ['Emergency Transport', 'Paramedic'],
-  pharmacy: ['Prescription Drugs', 'OTC Medicines'],
-  petrol: ['Petrol', 'Diesel'],
-  ev_charging: ['EV Charging'],
-  government: ['Public Services'],
+  hospital:    ['Emergency Care', 'Outpatient', 'Ambulance'],
+  police:      ['Emergency Response', 'Crime Reporting', 'FIR Registration'],
+  fire:        ['Fire Fighting', 'Rescue Operations', 'Hazmat Response'],
+  ambulance:   ['Emergency Transport', 'Paramedic Care', 'Patient Pickup'],
+  pharmacy:    ['Prescription Drugs', 'OTC Medicines', 'First Aid'],
+  petrol:      ['Petrol', 'Diesel', 'CNG'],
+  ev_charging: ['EV Charging', 'Fast Charge'],
+  government:  ['Public Services', 'Civil Administration'],
 };
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
 function defaultHours(category: string) {
-  const always = ['hospital','ambulance','fire','police'];
+  const always = ['hospital', 'ambulance', 'fire', 'police'];
   if (always.includes(category)) {
     return DAYS.map(day => ({ day, open: '00:00', close: '23:59', is24Hours: true }));
   }
@@ -139,37 +182,73 @@ interface OsmElement {
   tags?: OsmTags;
 }
 
+// ── Determine category from all possible OSM tag combinations ──
+function resolveCategory(tags: OsmTags): ServiceCategory | undefined {
+  // 1. amenity tag (most common)
+  if (tags.amenity) {
+    const cat = AMENITY_MAP[tags.amenity];
+    if (cat) return cat;
+  }
+  // 2. emergency tag
+  if (tags.emergency && tags.emergency !== 'no') {
+    const cat = EMERGENCY_MAP[tags.emergency];
+    if (cat) return cat;
+  }
+  // 3. healthcare tag
+  if (tags.healthcare) {
+    const cat = HEALTHCARE_MAP[tags.healthcare];
+    if (cat) return cat;
+  }
+  // 4. building tag
+  if (tags.building === 'hospital' || tags.building === 'health_centre') return 'hospital';
+  if (tags.building === 'fire_station') return 'fire';
+  if (tags.building === 'police') return 'police';
+  if (tags.building === 'government') return 'government';
+  // 5. landuse tag
+  if (tags.landuse === 'hospital') return 'hospital';
+  // 6. office tag
+  if (tags.office === 'government') return 'government';
+  if (tags.office === 'police') return 'police';
+
+  return undefined;
+}
+
 // ── Parse one OSM element ──────────────────────────────────
 function parseElement(
   el: OsmElement,
   origin: Coordinates,
   index: number
 ): EmergencyService | null {
-  const lat = el.type === 'way' ? el.center?.lat : el.lat;
-  const lng = el.type === 'way' ? el.center?.lon : el.lon;
+  // Determine coordinates — nodes have lat/lon, ways/relations have center
+  const lat = el.lat ?? el.center?.lat;
+  const lng = el.lon ?? el.center?.lon;
   if (lat == null || lng == null) return null;
 
   const tags: OsmTags = el.tags ?? {};
 
-  // Determine category
-  let category: ServiceCategory | undefined;
-  if (tags.amenity) category = AMENITY_MAP[tags.amenity];
-  if (!category && tags.emergency) category = EMERGENCY_MAP[tags.emergency];
-  if (!category && tags.healthcare) category = 'hospital';
+  const category = resolveCategory(tags);
   if (!category) return null;
 
   const id = `osm-${el.type}-${el.id}`;
   const hash = stableHash(id);
 
-  // Name
-  const name = tags.name ?? tags['name:en'] ?? tags.operator ?? fallbackName(category, index);
+  // Name — try multiple tag keys
+  const name =
+    tags.name ??
+    tags['name:en'] ??
+    tags.operator ??
+    tags['operator:en'] ??
+    tags.brand ??
+    fallbackName(category, index);
 
-  // Address
+  // Address — assemble from parts or use full address tag
   const addrParts = [
     tags['addr:housenumber'],
     tags['addr:street'],
-    tags['addr:suburb'] ?? tags['addr:city'] ?? tags['addr:district'],
+    tags['addr:suburb'] ?? tags['addr:neighbourhood'],
+    tags['addr:city'] ?? tags['addr:district'] ?? tags['addr:state'],
   ].filter(Boolean);
+
   const address =
     addrParts.length > 0
       ? addrParts.join(', ')
@@ -177,18 +256,26 @@ function parseElement(
 
   // Phone
   const phone =
-    tags.phone ?? tags['contact:phone'] ?? tags['phone:emergency'] ?? DEFAULT_PHONES[category] ?? 'N/A';
+    tags.phone ??
+    tags['contact:phone'] ??
+    tags['phone:emergency'] ??
+    tags['contact:emergency'] ??
+    DEFAULT_PHONES[category] ??
+    'N/A';
 
   // Hours
   const is24Hours =
     tags.opening_hours === '24/7' ||
     ['hospital', 'ambulance', 'fire', 'police'].includes(category);
 
-  // Extras from tags
+  // Extra services from tags
   const extraServices: string[] = [];
-  if (tags.beds) extraServices.push(`${tags.beds} Beds`);
-  if (tags.emergency === 'yes') extraServices.push('Emergency Line');
-  if (tags.wheelchair === 'yes') extraServices.push('Wheelchair Access');
+  if (tags.beds)                     extraServices.push(`${tags.beds} Beds`);
+  if (tags.emergency === 'yes')      extraServices.push('Emergency Line');
+  if (tags.wheelchair === 'yes')     extraServices.push('Wheelchair Access');
+  if (tags.air_conditioning === 'yes') extraServices.push('Air Conditioned');
+  if (tags.speciality)               extraServices.push(tags.speciality);
+  if (tags.dispensing === 'yes')     extraServices.push('Dispensing Pharmacy');
 
   const dist = haversineKm(origin.lat, origin.lng, lat, lng);
 
@@ -199,8 +286,8 @@ function parseElement(
     coordinates: { lat, lng },
     address,
     phone,
-    rating: Math.round((3.5 + (hash % 15) / 10) * 10) / 10,   // 3.5–5.0
-    reviewCount: 20 + (hash % 480),
+    rating: Math.round((3.0 + (hash % 20) / 10) * 10) / 10,  // 3.0–5.0
+    reviewCount: 10 + (hash % 990),
     isOpen: true,
     is24Hours,
     operatingHours: defaultHours(category),
@@ -212,11 +299,7 @@ function parseElement(
 }
 
 // ── Fetch from one mirror with timeout ─────────────────────
-async function fetchFromMirror(
-  url: string,
-  query: string,
-  timeoutMs: number
-): Promise<Response> {
+async function fetchFromMirror(url: string, query: string, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -224,7 +307,8 @@ async function fetchFromMirror(
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'EmergencyServiceLocatorApp/1.0',
+        'User-Agent': 'EmergencyServiceLocatorApp/1.0 (open-source)',
+        'Accept': 'application/json',
       },
       body: `data=${encodeURIComponent(query)}`,
       signal: controller.signal,
@@ -246,47 +330,68 @@ export async function fetchRealServices(
 
   let lastError: unknown;
 
-  // Try each mirror in turn
   for (const mirror of OVERPASS_MIRRORS) {
     try {
-      const res = await fetchFromMirror(mirror, query, 15_000);
+      const res = await fetchFromMirror(mirror, query, 25_000);
 
       if (!res.ok) {
         lastError = new Error(`HTTP ${res.status} from ${mirror}`);
-        continue; // try next mirror
+        continue;
       }
 
       const text = await res.text();
 
-      // Check for Overpass error response (HTML error pages)
-      if (text.startsWith('<') || text.includes('runtime error') || text.includes('Not Acceptable')) {
-        lastError = new Error(`Overpass error from ${mirror}`);
+      // Detect HTML error pages from Overpass
+      if (
+        text.startsWith('<') ||
+        text.includes('runtime error') ||
+        text.includes('Not Acceptable') ||
+        text.includes('Dispatcher_Client')
+      ) {
+        lastError = new Error(`Overpass server error from ${mirror}: ${text.slice(0, 120)}`);
         continue;
       }
 
-      const data: { elements: OsmElement[] } = JSON.parse(text);
+      let data: { elements: OsmElement[] };
+      try {
+        data = JSON.parse(text);
+      } catch {
+        lastError = new Error(`Invalid JSON from ${mirror}`);
+        continue;
+      }
 
-      // Deduplicate by category+name key
+      if (!Array.isArray(data.elements)) {
+        lastError = new Error(`No elements array from ${mirror}`);
+        continue;
+      }
+
+      // Parse all elements
       const seen = new Set<string>();
       const services: EmergencyService[] = [];
 
-      (data.elements ?? []).forEach((el, i) => {
+      data.elements.forEach((el, i) => {
         const parsed = parseElement(el, location, i);
         if (!parsed) return;
-        const key = `${parsed.category}::${parsed.name.toLowerCase().trim()}`;
+
+        // Deduplicate: same category + same name at nearly the same spot
+        const roundedLat = parsed.coordinates.lat.toFixed(4);
+        const roundedLng = parsed.coordinates.lng.toFixed(4);
+        const key = `${parsed.category}::${parsed.name.toLowerCase().replace(/\s+/g, '')}::${roundedLat},${roundedLng}`;
         if (seen.has(key)) return;
         seen.add(key);
         services.push(parsed);
       });
 
+      console.info(`[Overpass] ${mirror}: fetched ${data.elements.length} elements → ${services.length} unique services within ${radiusM / 1000}km`);
+
       return services.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
-        lastError = new Error(`Timeout on ${mirror}`);
+        lastError = new Error(`Timeout (25s) on ${mirror}`);
       } else {
         lastError = err;
       }
-      // try next mirror
+      console.warn(`[Overpass] Mirror ${mirror} failed:`, lastError);
     }
   }
 

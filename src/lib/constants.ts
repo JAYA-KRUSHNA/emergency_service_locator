@@ -6,14 +6,15 @@ import { RadiusOption, FilterCategory } from './types';
 
 // ── Radius Options ──────────────────────────────────────────
 export const RADIUS_OPTIONS: RadiusOption[] = [
-  { label: '1 km', value: 1000 },
-  { label: '2 km', value: 2000 },
-  { label: '5 km', value: 5000 },
+  { label: '1 km',  value: 1000  },
+  { label: '2 km',  value: 2000  },
+  { label: '5 km',  value: 5000  },
   { label: '10 km', value: 10000 },
+  { label: '15 km', value: 15000 },
   { label: '20 km', value: 20000 },
 ];
 
-export const DEFAULT_RADIUS = 15000; // 15km default — shows all mock services
+export const DEFAULT_RADIUS = 10000; // 10km — gives plenty of results without overloading API
 
 // ── Filter Categories ───────────────────────────────────────
 export const FILTER_CATEGORIES: FilterCategory[] = [
