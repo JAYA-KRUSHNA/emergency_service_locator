@@ -5,6 +5,8 @@ import { useApp } from '@/context/AppContext';
 import { RouteInfo } from '@/lib/types';
 import { CATEGORY_LABELS } from '@/lib/constants';
 import { fmtDist, fmtDuration } from '@/lib/osrmRouting';
+import { formatDistance } from '@/lib/utils';
+
 
 const CAT_EMOJIS: Record<string, string> = {
   hospital: '🏥', police: '🚔', fire: '🚒', ambulance: '🚑',
@@ -232,6 +234,58 @@ export function RoutePanel() {
         {/* Routes */}
         {!isLoadingRoute && !routeError && routes.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+            {/* Mismatch warning + Google Maps fallback */}
+            {(() => {
+              const straightLineKm = selectedService.distance ?? 0;
+              const roadKm = (selectedRoute ?? routes[0])?.distance ?? 0;
+              const ratio = straightLineKm > 0 ? roadKm / straightLineKm : 0;
+              const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${selectedService.coordinates.lat},${selectedService.coordinates.lng}&travelmode=driving`;
+
+              if (ratio > 3 && roadKm > 1) {
+                return (
+                  <div style={{
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    background: '#fffbeb',
+                    border: '1px solid rgba(245,158,11,0.35)',
+                    display: 'flex', flexDirection: 'column', gap: '8px',
+                  }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: '16px', flexShrink: 0 }}>⚠️</span>
+                      <div>
+                        <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#92400e', marginBottom: '2px' }}>
+                          Road route is much longer than straight-line distance
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#b45309', lineHeight: 1.5 }}>
+                          Straight line: <strong>{formatDistance(straightLineKm)}</strong> — Road via OSM: <strong>{roadKm.toFixed(1)} km</strong>.
+                          Local roads may not be fully mapped. Try Google Maps for a better route.
+                        </div>
+                      </div>
+                    </div>
+                    <a
+                      href={gmapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                        padding: '9px 14px',
+                        background: '#4285F4',
+                        color: 'white',
+                        borderRadius: '9px',
+                        fontSize: '12px', fontWeight: 700,
+                        textDecoration: 'none',
+                        boxShadow: '0 2px 8px rgba(66,133,244,0.3)',
+                      }}
+                    >
+                      <span>🗺️</span> Open in Google Maps
+                    </a>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             {/* Route cards */}
             <div>
               <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--c-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>

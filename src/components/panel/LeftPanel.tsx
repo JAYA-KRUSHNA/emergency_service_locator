@@ -540,9 +540,12 @@ function ServiceList() {
                     <span style={{ fontSize: '10.5px', color: 'var(--c-text-3)' }}>{CATEGORY_LABELS[service.category]}</span>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '5px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--c-text-1)' }}>
-                        {service.distance !== undefined ? formatDistance(service.distance) : '—'}
-                      </span>
+                      <div>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--c-text-1)' }}>
+                          {service.distance !== undefined ? formatDistance(service.distance) : '—'}
+                        </span>
+                        <span style={{ fontSize: '9.5px', color: 'var(--c-text-4)', marginLeft: '2px' }}>straight line</span>
+                      </div>
                       <span style={{ fontSize: '11px', color: 'var(--c-text-3)' }}>·</span>
                       <span style={{ fontSize: '11px', color: 'var(--c-text-2)' }}>
                         {service.travelTime !== undefined ? formatTravelTime(service.travelTime) : '—'}
@@ -572,6 +575,20 @@ function ServiceList() {
                         display: 'flex', alignItems: 'center', gap: '4px',
                       }}
                     >🗺️ Go</button>
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${service.coordinates.lat},${service.coordinates.lng}&travelmode=driving`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        padding: '4px 10px', fontSize: '11px', fontWeight: 600,
+                        background: '#4285F4', color: 'white',
+                        border: 'none', borderRadius: '7px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '3px',
+                        textDecoration: 'none',
+                      }}
+                      title="Open in Google Maps"
+                    >G</a>
                     <button
                       onClick={e => { e.stopPropagation(); setSelectedService(service); setShowDetails(true); }}
                       style={{

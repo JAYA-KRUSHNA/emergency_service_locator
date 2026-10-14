@@ -102,13 +102,19 @@ function PopupContent({
         padding: '8px 10px', borderRadius: '9px', background: '#f8fafc',
         marginBottom: '10px', fontSize: '11.5px',
       }}>
-        <span style={{ fontWeight: 700, color: '#0f172a' }}>
-          {service.distance !== undefined ? formatDistance(service.distance) : '—'}
-        </span>
+        <div>
+          <div style={{ fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
+            {service.distance !== undefined ? formatDistance(service.distance) : '—'}
+          </div>
+          <div style={{ fontSize: '9.5px', color: '#94a3b8', marginTop: '1px' }}>straight line</div>
+        </div>
         <span style={{ color: '#cbd5e1' }}>·</span>
-        <span style={{ color: '#475569' }}>
-          {service.travelTime !== undefined ? formatTravelTime(service.travelTime) : '—'}
-        </span>
+        <div>
+          <div style={{ color: '#475569', lineHeight: 1 }}>
+            {service.travelTime !== undefined ? formatTravelTime(service.travelTime) : '—'}
+          </div>
+          <div style={{ fontSize: '9.5px', color: '#94a3b8', marginTop: '1px' }}>est. drive</div>
+        </div>
         <span style={{ color: '#cbd5e1' }}>·</span>
         <span style={{ color: '#f59e0b' }}>★ {service.rating.toFixed(1)}</span>
         <span style={{ marginLeft: 'auto', color: service.isOpen ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
