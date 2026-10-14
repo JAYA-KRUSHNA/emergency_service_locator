@@ -389,7 +389,7 @@ function ServiceList() {
   const {
     getFilteredServices, nearestService,
     setSelectedService, setShowDetails, requestDirections,
-    isLoadingServices, isUsingFallback, refetchServices,
+    isLoadingServices, fetchError, refetchServices,
   } = useApp();
   const services = getFilteredServices();
   const [sortBy, setSortBy] = useState<'nearest' | 'fastest' | 'rated'>('nearest');
@@ -404,40 +404,62 @@ function ServiceList() {
   if (isLoadingServices) {
     return (
       <div style={{ padding: '0 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-          <span style={{ fontSize: '14px', animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--c-text-2)' }}>Loading real services…</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{
+                width: '7px', height: '7px', borderRadius: '50%',
+                background: 'var(--c-primary)',
+                animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+              }} />
+            ))}
+          </div>
+          <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--c-text-2)' }}>Fetching real services from OpenStreetMap…</span>
         </div>
         {[1,2,3,4].map(i => (
           <div key={i} style={{ marginBottom: '8px' }}>
-            <div className="skeleton" style={{ height: '88px', borderRadius: '12px' }} />
+            <div className="skeleton" style={{ height: '96px', borderRadius: '12px' }} />
           </div>
         ))}
       </div>
     );
   }
 
+  // ── Error state ──────────────────────────────────────────
+  if (fetchError && services.length === 0) {
+    return (
+      <div style={{ padding: '0 16px' }}>
+        <div style={{
+          padding: '16px',
+          borderRadius: '14px',
+          background: '#fef2f2',
+          border: '1px solid rgba(220,38,38,0.2)',
+          marginBottom: '12px',
+        }}>
+          <div style={{ fontSize: '28px', marginBottom: '8px', textAlign: 'center' }}>📡</div>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: '#dc2626', marginBottom: '4px', textAlign: 'center' }}>
+            Could not load services
+          </div>
+          <div style={{ fontSize: '11.5px', color: '#64748b', lineHeight: 1.5, marginBottom: '12px', textAlign: 'center' }}>
+            {fetchError}
+          </div>
+          <button
+            onClick={refetchServices}
+            style={{
+              width: '100%', padding: '10px',
+              background: 'var(--c-primary)', color: 'white',
+              border: 'none', borderRadius: '10px',
+              fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+            }}
+          >🔄 Try Again</button>
+        </div>
+      </div>
+    );
+  }
 
 
   return (
     <div style={{ padding: '0 16px' }}>
-      {/* Fallback banner */}
-      {isUsingFallback && (
-        <div style={{
-          marginBottom: '10px',
-          padding: '8px 12px',
-          borderRadius: '10px',
-          background: '#fffbeb',
-          border: '1px solid rgba(245,158,11,0.3)',
-          display: 'flex', alignItems: 'center', gap: '8px',
-        }}>
-          <span style={{ fontSize: '14px' }}>📡</span>
-          <div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#92400e' }}>Estimated data — live search unavailable</div>
-            <div style={{ fontSize: '10.5px', color: '#b45309' }}>Positions are approximate. <button onClick={refetchServices} style={{ background: 'none', border: 'none', color: 'var(--c-primary)', fontWeight: 700, cursor: 'pointer', fontSize: '10.5px', padding: 0 }}>Retry live search →</button></div>
-          </div>
-        </div>
-      )}
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
@@ -446,12 +468,12 @@ function ServiceList() {
             {services.length} service{services.length !== 1 ? 's' : ''}
           </span>
           <span style={{
-            fontSize: '9px', fontWeight: 700,
-            color: isUsingFallback ? '#92400e' : '#16a34a',
-            background: isUsingFallback ? '#fffbeb' : '#f0fdf4',
-            padding: '1px 6px', borderRadius: '99px',
-            border: `1px solid ${isUsingFallback ? 'rgba(245,158,11,0.3)' : 'rgba(22,163,74,0.2)'}`,
-          }}>{isUsingFallback ? 'ESTIMATED' : 'LIVE'}</span>
+              fontSize: '9px', fontWeight: 700,
+              color: '#16a34a',
+              background: '#f0fdf4',
+              padding: '1px 6px', borderRadius: '99px',
+              border: '1px solid rgba(22,163,74,0.2)',
+            }}>LIVE</span>
         </div>
         <div style={{ display: 'flex', gap: '2px' }}>
           {(['nearest', 'fastest', 'rated'] as const).map(s => (
@@ -474,9 +496,24 @@ function ServiceList() {
       {/* List */}
       {sorted.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '32px 16px' }}>
-          <div style={{ fontSize: '32px', marginBottom: '10px' }}>🔍</div>
-          <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--c-text-2)', marginBottom: '4px' }}>No services found</p>
-          <p style={{ fontSize: '12px', color: 'var(--c-text-3)' }}>Try expanding the radius or changing filters</p>
+          <div style={{ fontSize: '36px', marginBottom: '10px' }}>{fetchError ? '📡' : '🔍'}</div>
+          <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--c-text-2)', marginBottom: '6px' }}>
+            {fetchError ? 'Service data unavailable' : 'No services found'}
+          </p>
+          <p style={{ fontSize: '12px', color: 'var(--c-text-3)', lineHeight: 1.6, marginBottom: '12px' }}>
+            {fetchError
+              ? 'Check your internet connection.'
+              : 'Try increasing the radius or changing your category filters.'}
+          </p>
+          <button
+            onClick={refetchServices}
+            style={{
+              padding: '8px 18px',
+              background: 'var(--c-primary)', color: 'white',
+              border: 'none', borderRadius: '10px',
+              fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+            }}
+          >🔄 Reload</button>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
