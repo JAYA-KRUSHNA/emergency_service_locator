@@ -6,20 +6,21 @@
 
 import { Coordinates, RouteInfo, TrafficCondition } from './types';
 
-// ── OSRM mirrors ───────────────────────────────────────────
+// ── OSRM base URL ──────────────────────────────────────────
 const OSRM_BASE = 'https://router.project-osrm.org';
 
 // ── Types from OSRM response ───────────────────────────────
 interface OsrmManeuver {
-  type: string;        // 'turn', 'depart', 'arrive', 'merge', 'ramp', etc.
+  type: string;        // 'turn', 'depart', 'arrive', 'merge', 'ramp', 'roundabout', etc.
   modifier?: string;   // 'left', 'right', 'straight', 'slight left', etc.
   bearing_after?: number;
+  exit?: number;       // roundabout exit number
 }
 
 interface OsrmStep {
   distance: number;          // meters
   duration: number;          // seconds
-  name: string;              // road name
+  name: string;              // road name (may be empty string)
   maneuver: OsrmManeuver;
   mode: string;
 }
@@ -50,7 +51,7 @@ export interface DirectionStep {
   instruction: string;
   distance: number;           // meters
   duration: number;           // seconds
-  icon: string;               // emoji icon
+  icon: string;               // emoji / arrow icon
   roadName: string;
 }
 
@@ -59,74 +60,150 @@ export interface RealRoute extends RouteInfo {
   steps: DirectionStep[];
 }
 
-// ── Maneuver → human text + emoji ─────────────────────────
+// ── Modifier text & icon tables ────────────────────────────
+const MOD_TEXT: Record<string, string> = {
+  left:          'Turn left',
+  right:         'Turn right',
+  'slight left': 'Keep left',
+  'slight right':'Keep right',
+  'sharp left':  'Sharp left',
+  'sharp right': 'Sharp right',
+  straight:      'Continue straight',
+  uturn:         'Make a U-turn',
+};
+
+const MOD_ICON: Record<string, string> = {
+  left:          '↰',
+  right:         '↱',
+  'slight left': '↖',
+  'slight right':'↗',
+  'sharp left':  '↩',
+  'sharp right': '↪',
+  straight:      '↑',
+  uturn:         '↩',
+};
+
+// ── Maneuver → human-readable instruction + icon ──────────
 function humanInstruction(step: OsrmStep): { text: string; icon: string } {
-  const { type, modifier } = step.maneuver;
-  const road = step.name ? `onto ${step.name}` : '';
-
-  const modText: Record<string, string> = {
-    left: 'Turn left',
-    right: 'Turn right',
-    'slight left': 'Slight left',
-    'slight right': 'Slight right',
-    'sharp left': 'Sharp left turn',
-    'sharp right': 'Sharp right turn',
-    straight: 'Continue straight',
-    uturn: 'Make a U-turn',
-  };
-
-  const modIcon: Record<string, string> = {
-    left: '↰',
-    right: '↱',
-    'slight left': '↖',
-    'slight right': '↗',
-    'sharp left': '↩',
-    'sharp right': '↪',
-    straight: '↑',
-    uturn: '↩',
-  };
+  const type = step.maneuver.type;
+  const modifier = step.maneuver.modifier ?? '';
+  const road = step.name || ''; // empty string when road has no name
 
   switch (type) {
+    // ── Departure
     case 'depart':
-      return { text: `Head ${road || 'out'}`, icon: '🚀' };
+      return {
+        text: road ? `Head out on ${road}` : 'Start your journey',
+        icon: '🚦',
+      };
+
+    // ── Arrival
     case 'arrive':
       return { text: 'You have arrived at your destination', icon: '🏁' };
+
+    // ── Standard turns
     case 'turn':
     case 'end of road': {
-      const dir = modifier ?? 'straight';
+      const base = MOD_TEXT[modifier] ?? 'Turn';
       return {
-        text: `${modText[dir] ?? 'Turn'} ${road}`.trim(),
-        icon: modIcon[dir] ?? '↑',
+        text: road ? `${base} onto ${road}` : base,
+        icon: MOD_ICON[modifier] ?? '↑',
       };
     }
+
+    // ── Continue / road name change
     case 'continue':
-      return { text: `Continue ${road}`.trim(), icon: '↑' };
-    case 'merge':
-      return { text: `Merge ${road}`.trim(), icon: '⤵' };
-    case 'ramp':
-      return { text: `Take the ramp ${road}`.trim(), icon: '↗' };
-    case 'fork': {
-      const dir = modifier === 'left' ? 'left' : 'right';
-      return { text: `Keep ${dir} at the fork ${road}`.trim(), icon: modIcon[dir] };
+    case 'new name': {
+      if (road) {
+        return {
+          text: modifier === 'straight' || !modifier
+            ? `Continue on ${road}`
+            : `${MOD_TEXT[modifier] ?? 'Continue'} on ${road}`,
+          icon: MOD_ICON[modifier] ?? '↑',
+        };
+      }
+      return { text: 'Continue straight', icon: '↑' };
     }
+
+    // ── Merge onto road
+    case 'merge':
+      return {
+        text: road ? `Merge onto ${road}` : `Merge ${modifier}`.trim(),
+        icon: modifier.includes('left') ? '↰' : '↱',
+      };
+
+    // ── On-ramp
+    case 'ramp':
+    case 'on ramp':
+      return {
+        text: road ? `Take the ramp onto ${road}` : 'Take the on-ramp',
+        icon: modifier.includes('left') ? '↖' : '↗',
+      };
+
+    // ── Off-ramp / exit
+    case 'off ramp':
+      return {
+        text: road ? `Take the exit onto ${road}` : 'Take the exit',
+        icon: modifier.includes('left') ? '↖' : '↗',
+      };
+
+    // ── Fork in road
+    case 'fork': {
+      const dir = modifier.includes('left') ? 'left' : 'right';
+      return {
+        text: road ? `Keep ${dir} at the fork onto ${road}` : `Keep ${dir} at the fork`,
+        icon: MOD_ICON[dir] ?? '↗',
+      };
+    }
+
+    // ── Roundabout entry
     case 'roundabout':
-    case 'rotary':
-      return { text: `Enter the roundabout ${road}`.trim(), icon: '🔄' };
+    case 'rotary': {
+      const exitNum = step.maneuver.exit;
+      const exitTxt = exitNum ? ` — take exit ${exitNum}` : '';
+      return {
+        text: road
+          ? `Enter the roundabout${exitTxt}, continue onto ${road}`
+          : `Enter the roundabout${exitTxt}`,
+        icon: '🔄',
+      };
+    }
+
+    // ── Roundabout exit
     case 'exit roundabout':
     case 'exit rotary':
-      return { text: `Exit the roundabout ${road}`.trim(), icon: '↗' };
+      return {
+        text: road ? `Exit the roundabout onto ${road}` : 'Exit the roundabout',
+        icon: '↗',
+      };
+
+    // ── Lane instruction
+    case 'use lane':
+      return {
+        text: `Use the ${modifier} lane`.trim(),
+        icon: MOD_ICON[modifier] ?? '↑',
+      };
+
+    // ── Zone / administrative boundary notification
+    case 'notification':
+      return { text: road ? `Entering ${road}` : 'Proceed', icon: 'ℹ️' };
+
+    // ── Fallback
     default:
-      return { text: `Continue ${road}`.trim() || 'Continue', icon: '↑' };
+      return {
+        text: road ? `Continue on ${road}` : 'Continue',
+        icon: '↑',
+      };
   }
 }
 
-// ── Format meters ──────────────────────────────────────────
+// ── Format meters → human distance ────────────────────────
 export function fmtDist(meters: number): string {
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-// ── Format seconds ─────────────────────────────────────────
+// ── Format seconds → human duration ───────────────────────
 export function fmtDuration(seconds: number): string {
   const m = Math.round(seconds / 60);
   if (m < 60) return `${m} min`;
@@ -135,7 +212,7 @@ export function fmtDuration(seconds: number): string {
   return rem > 0 ? `${h}h ${rem}min` : `${h}h`;
 }
 
-// ── Arrival time ───────────────────────────────────────────
+// ── Estimate arrival time ──────────────────────────────────
 function arrivalTime(durationSec: number): string {
   const d = new Date(Date.now() + durationSec * 1000);
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -146,8 +223,11 @@ export async function fetchOsrmRoute(
   from: Coordinates,
   to: Coordinates
 ): Promise<RealRoute[]> {
+  // OSRM expects coordinates as lng,lat
   const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
-  const url = `${OSRM_BASE}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true&alternatives=true`;
+  const url =
+    `${OSRM_BASE}/route/v1/driving/${coords}` +
+    `?overview=full&geometries=geojson&steps=true&alternatives=true`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15_000);
@@ -169,8 +249,8 @@ export async function fetchOsrmRoute(
     throw new Error('OSRM returned no routes');
   }
 
-  // Map traffic condition based on duration vs distance ratio (rough heuristic)
-  const traffic = (route: OsrmRoute): TrafficCondition => {
+  // Traffic heuristic: estimate based on average speed
+  const trafficLevel = (route: OsrmRoute): TrafficCondition => {
     const speedKmh = (route.distance / 1000) / (route.duration / 3600);
     if (speedKmh > 40) return 'light';
     if (speedKmh > 20) return 'moderate';
@@ -178,13 +258,15 @@ export async function fetchOsrmRoute(
   };
 
   return data.routes.map((route, idx): RealRoute => {
-    // Polyline from GeoJSON [lng, lat] → { lat, lng }
-    const polyline: Coordinates[] = route.geometry.coordinates.map(([lng, lat]) => ({ lat, lng }));
+    // Convert GeoJSON [lng, lat] → { lat, lng }
+    const polyline: Coordinates[] = route.geometry.coordinates.map(
+      ([lng, lat]) => ({ lat, lng })
+    );
 
-    // Steps from all legs
+    // Flatten steps from all legs, filter trivial steps, build instructions
     const steps: DirectionStep[] = route.legs
       .flatMap(leg => leg.steps)
-      .filter(s => s.distance > 5) // skip tiny steps
+      .filter(s => s.distance > 2 || s.maneuver.type === 'arrive') // keep arrive even at 0m
       .map(s => {
         const { text, icon } = humanInstruction(s);
         return {
@@ -196,13 +278,13 @@ export async function fetchOsrmRoute(
         };
       });
 
-    const tc = traffic(route);
+    const tc = trafficLevel(route);
 
     return {
       id: `osrm-route-${idx}`,
-      label: idx === 0 ? 'Fastest Route' : 'Alternative Route',
-      distance: Math.round(route.distance / 100) / 10, // km, 1dp
-      duration: Math.round(route.duration / 60),        // minutes
+      label: idx === 0 ? 'Fastest Route' : `Alternative Route ${idx}`,
+      distance: Math.round(route.distance / 100) / 10,  // km, 1 decimal
+      duration: Math.round(route.duration / 60),         // minutes
       traffic: tc,
       arrivalTime: arrivalTime(route.duration),
       isRecommended: idx === 0,
